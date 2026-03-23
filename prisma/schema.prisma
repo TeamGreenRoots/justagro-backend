@@ -1,0 +1,232 @@
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  FARMER
+  BUYER
+  AGGREGATOR
+}
+
+enum DeliveryStatus {
+  PENDING
+  PAID
+  CANCELLED
+  DISPUTED
+}
+
+enum LoanStatus {
+  PENDING
+  APPROVED
+  DISBURSED
+  REPAYING
+  COMPLETED
+  REJECTED
+}
+
+enum TransactionType {
+  PAYMENT_RECEIVED
+  LOAN_DISBURSEMENT
+  LOAN_REPAYMENT
+  WITHDRAWAL
+  PLATFORM_FEE
+}
+
+enum NotificationChannel {
+  SMS
+  WHATSAPP
+  IN_APP
+}
+
+// USER 
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String?  @unique
+  phone        String   @unique
+  passwordHash String
+  role         Role
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  farmer        Farmer?
+  buyer         Buyer?
+  aggregator    Aggregator?
+  notifications Notification[]
+  refreshTokens RefreshToken[]
+}
+
+// REFRESH TOKENS
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+// FARMER
+model Farmer {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id])
+  farmName         String
+  location         String
+  cropTypes        String[]
+  virtualAccountNo String?  @unique
+  bankName         String?
+  bankCode         String?
+  creditScore      Int      @default(0)
+  totalEarned      Float    @default(0)
+  walletBalance    Float    @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  deliveries   Delivery[]
+  transactions Transaction[]
+  loans        Loan[]
+  harvests     Harvest[]
+}
+
+// BUYER 
+model Buyer {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id])
+  companyName String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  deliveries   Delivery[]
+  transactions Transaction[]
+}
+
+// AGGREGATOR
+model Aggregator {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id])
+  organizationName String
+  commissionRate   Float    @default(1.0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  deliveries Delivery[]
+}
+
+// DELIVERY
+model Delivery {
+  id            String         @id @default(cuid())
+  farmerId      String
+  farmer        Farmer         @relation(fields: [farmerId], references: [id])
+  buyerId       String
+  buyer         Buyer          @relation(fields: [buyerId], references: [id])
+  aggregatorId  String?
+  aggregator    Aggregator?    @relation(fields: [aggregatorId], references: [id])
+  productName   String
+  quantity      Float
+  pricePerKg    Float
+  totalAmount   Float
+  status        DeliveryStatus @default(PENDING)
+  paidAt        DateTime?
+  interswitchRef String?
+  paymentMethod String?
+  receiptCode   String?        @unique
+  riskScore     String?        @default("LOW")
+  riskReason    String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  transaction   Transaction?
+  receipt       Receipt?
+  notifications Notification[]
+}
+
+// RECEIPT 
+model Receipt {
+  id            String   @id @default(cuid())
+  deliveryId    String   @unique
+  delivery      Delivery @relation(fields: [deliveryId], references: [id])
+  receiptCode   String   @unique
+  farmerName    String
+  buyerName     String
+  productName   String
+  quantity      Float
+  amount        Float
+  paymentMethod String
+  paidAt        DateTime
+  createdAt     DateTime @default(now())
+}
+
+// HARVEST 
+model Harvest {
+  id          String   @id @default(cuid())
+  farmerId    String
+  farmer      Farmer   @relation(fields: [farmerId], references: [id])
+  cropType    String
+  quantity    Float
+  pricePerKg  Float
+  totalValue  Float
+  description String?
+  confirmed   Boolean  @default(false)
+  confirmedBy String?
+  createdAt   DateTime @default(now())
+}
+
+// TRANSACTION 
+model Transaction {
+  id             String          @id @default(cuid())
+  farmerId       String
+  farmer         Farmer          @relation(fields: [farmerId], references: [id])
+  buyerId        String?
+  buyer          Buyer?          @relation(fields: [buyerId], references: [id])
+  deliveryId     String?         @unique
+  delivery       Delivery?       @relation(fields: [deliveryId], references: [id])
+  type           TransactionType
+  amount         Float
+  platformFee    Float           @default(0)
+  netAmount      Float
+  description    String
+  interswitchRef String?
+  status         String          @default("SUCCESS")
+  createdAt      DateTime        @default(now())
+}
+
+// LOAN 
+model Loan {
+  id             String     @id @default(cuid())
+  farmerId       String
+  farmer         Farmer     @relation(fields: [farmerId], references: [id])
+  amount         Float
+  interestRate   Float      @default(5.0)
+  totalRepayable Float
+  amountRepaid   Float      @default(0)
+  status         LoanStatus @default(PENDING)
+  disbursedAt    DateTime?
+  dueDate        DateTime?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+}
+
+// NOTIFICATION 
+model Notification {
+  id         String              @id @default(cuid())
+  userId     String
+  user       User                @relation(fields: [userId], references: [id])
+  deliveryId String?
+  delivery   Delivery?           @relation(fields: [deliveryId], references: [id])
+  channel    NotificationChannel
+  status     String              @default("SENT")
+  message    String
+  isRead     Boolean             @default(false)
+  createdAt  DateTime            @default(now())
+}
