@@ -158,8 +158,10 @@ export async function getUserById(userId: string) {
   const user = await prisma.user.findUnique({
     where:   { id: userId },
     include: { farmer: true, buyer: true, aggregator: true },
-    omit:    { passwordHash: true } as any,
   });
   if (!user) throw new AppError("User not found", 404);
-  return user;
+
+  // Strip password before returning
+  const { passwordHash, ...safeUser } = user;
+  return safeUser;
 }
