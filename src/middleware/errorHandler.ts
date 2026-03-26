@@ -1,76 +1,43 @@
 import { Request, Response, NextFunction } from "express";
 
 export class AppError extends Error {
-  statusCode: number;
-  constructor(message: string, statusCode: number) {
+  constructor(public message: string, public statusCode: number) {
     super(message);
-    this.statusCode = statusCode;
-    Error.captureStackTrace(this, this.constructor);
+    this.name = "AppError";
   }
 }
 
 export const errorHandler = (
-  err: any,
-  req: Request,
-  res: Response,
-  next: NextFunction
+  err: any, req: Request, res: Response, next: NextFunction
 ): void => {
-  console.error(`[ERROR] ${req.method} ${req.path}:`, err.message);
+  console.error(`[${new Date().toISOString()}] ${req.method} ${req.path} —`, err.message);
 
-  // Prisma errors
+  // Prisma unique constraint (check validation)
   if (err.code === "P2002") {
-    res.status(409).json({
-      success: false,
-      error:   "Conflict",
-      message: "A record with this value already exists",
-    });
+    res.status(409).json({ success: false, error: "Already exists", message: "A record with this value already exists" });
     return;
   }
-
+  // Prisma not found
   if (err.code === "P2025") {
-    res.status(404).json({
-      success: false,
-      error:   "Not Found",
-      message: "Record not found",
-    });
+    res.status(404).json({ success: false, error: "Not found", message: "Record not found" });
     return;
   }
 
-  const statusCode = err.statusCode || 500;
-  res.status(statusCode).json({
+  const status  = err.statusCode || 500;
+  const message = err.message    || "Something went wrong";
+
+  res.status(status).json({
     success: false,
-    error:   err.name || "Internal Server Error",
-    message: err.message || "Something went wrong",
+    error:   err.name || "Error",
+    message,
     ...(process.env.NODE_ENV === "development" && { stack: err.stack }),
   });
 };
 
-
-// notFound.ts (inline here for simplicity)
 export const notFound = (req: Request, res: Response): void => {
   res.status(404).json({
     success: false,
     error:   "Not Found",
-    message: `Route ${req.method} ${req.path} not found`,
+    message: `${req.method} ${req.path} does not exist`,
   });
 };
-
-
-// validate.ts
-import { ZodSchema } from "zod";
-
-export const validate = (schema: ZodSchema) =>
-  (req: Request, res: Response, next: NextFunction): void => {
-    const result = schema.safeParse(req.body);
-    if (!result.success) {
-      res.status(400).json({
-        success: false,
-        error:   "Validation Error",
-        message: result.error.errors.map(e => `${e.path.join(".")}: ${e.message}`).join(", "),
-        errors:  result.error.errors,
-      });
-      return;
-    }
-    req.body = result.data;
-    next();
-  };

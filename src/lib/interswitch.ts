@@ -1,138 +1,129 @@
-// interswitch
-import axios, { AxiosError } from "axios";
-import crypto from "crypto";
+import axios from "axios";
 
-const BASE_URL     = process.env.INTERSWITCH_BASE_URL     || "https://sandbox.interswitchng.com";
-const PASSPORT_URL = process.env.INTERSWITCH_PASSPORT_URL || "https://sandbox.interswitchng.com/passport";
+const BASE_URL      = process.env.INTERSWITCH_BASE_URL     || "https://qa.interswitchng.com";
+const MERCHANT_CODE = process.env.INTERSWITCH_MERCHANT_CODE || "MX180335";
+const PAY_ITEM_ID   = process.env.INTERSWITCH_PAY_ITEM_ID  || "";
 
-// Token cache
-let cachedToken: string | null = null;
-let tokenExpiry: number | null = null;
-
-async function getAccessToken(): Promise<string> {
-  if (cachedToken && tokenExpiry && Date.now() < tokenExpiry - 300_000) {
-    return cachedToken;
-  }
-  const credentials = Buffer.from(
-    `${process.env.INTERSWITCH_CLIENT_ID}:${process.env.INTERSWITCH_CLIENT_SECRET}`
-  ).toString("base64");
-
-  try {
-    const res = await axios.post(
-      `${PASSPORT_URL}/oauth/token`,
-      "grant_type=client_credentials",
-      { headers: { Authorization: `Basic ${credentials}`, "Content-Type": "application/x-www-form-urlencoded" }, timeout: 10_000 }
-    );
-    cachedToken = res.data.access_token;
-    tokenExpiry = Date.now() + res.data.expires_in * 1000;
-    return cachedToken!;
-  } catch (err) {
-    console.error("Interswitch auth failed:", (err as AxiosError).response?.data);
-    throw new Error("Interswitch authentication failed");
-  }
+export function generateTxnRef(): string {
+  const ts     = Date.now();
+  const random = Math.floor(1000 + Math.random() * 9000);
+  return `AGT_${ts}_${random}`;
 }
 
-export async function createVirtualAccount(data: { farmerId: string; name: string; phone: string }) {
+export function getPaymentConfig(data: {
+  txnRef:      string;
+  amountNaira: number;
+  custEmail:   string;
+  custName:    string;
+  custPhone?:  string;
+  redirectUrl: string;
+}): Record<string, any> {
+  const amountKobo = Math.round(data.amountNaira * 100); // change from integer kobo to whole naira
+
+  const config = {
+    merchant_code:     MERCHANT_CODE,
+    pay_item_id:       PAY_ITEM_ID,
+    txn_ref:           data.txnRef,
+    amount:            amountKobo,
+    currency:          566,          // NGN ISO code
+    cust_email:        data.custEmail || "customer@justagro.com",
+    cust_name:         data.custName  || "JustAgro Customer",
+    cust_mobile_no:    data.custPhone || "",
+    site_redirect_url: data.redirectUrl,
+    mode:              process.env.NODE_ENV === "production" ? "LIVE" : "TEST",
+  };
+
+  // Log config for debugging (remove when deploying / production)
+  // console.log("[Interswitch] Payment config:", {
+  //   merchant_code: config.merchant_code,
+  //   pay_item_id:   config.pay_item_id,
+  //   txn_ref:       config.txn_ref,
+  //   amount:        config.amount,
+  //   mode:          config.mode,
+  // });
+
+  return config;
+}
+
+export interface VerifyResult {
+  success:          boolean;
+  responseCode:     string;
+  responseDesc:     string;
+  amount:           number;
+  amountNaira:      number;
+  paymentReference: string;
+  merchantRef:      string;
+}
+
+export async function verifyTransaction(
+  txnRef:       string,
+  expectedKobo: number
+): Promise<VerifyResult> {
+  const url = `${BASE_URL}/collections/api/v1/gettransaction.json`;
+
   try {
-    const token = await getAccessToken();
-    const res   = await axios.post(
-      `${BASE_URL}/api/v2/quickteller/payments/collections/virtual-accounts`,
-      {
-        customerName:      data.name,
-        customerEmail:     `${data.phone}@justagro.com`,
-        customerPhone:     data.phone,
-        merchantReference: `FARM_${data.farmerId}_${Date.now()}`,
-        expiry:            null,
+    const res = await axios.get(url, {
+      params: {
+        merchantcode:         MERCHANT_CODE,
+        transactionreference: txnRef,
+        amount:               expectedKobo,
       },
-      { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, timeout: 15_000 }
-    );
-    return { accountNumber: res.data.accountNumber, bankName: res.data.bankName || "Access Bank", bankCode: res.data.bankCode || "044" };
-  } catch {
-    // Sandbox fallback
-    return {
-      accountNumber: `0${Math.floor(1_000_000_000 + Math.random() * 9_000_000_000)}`,
-      bankName: "Access Bank",
-      bankCode: "044",
-    };
-  }
-}
-
-export async function initiatePayment(data: {
-  deliveryId: string; buyerPhone: string; buyerEmail: string;
-  buyerName: string; amount: number; description: string; callbackUrl: string;
-}) {
-  try {
-    const token     = await getAccessToken();
-    const reference = `AGT_${data.deliveryId}_${Date.now()}`;
-    const res = await axios.post(
-      `${BASE_URL}/api/v3/purchases`,
-      {
-        merchantCode:   process.env.INTERSWITCH_MERCHANT_CODE,
-        payableCode:    process.env.INTERSWITCH_PAYABLE_CODE,
-        amount:         data.amount * 100,
-        transactionRef: reference,
-        currency:       "NGN",
-        customerId:     data.buyerPhone,
-        customerEmail:  data.buyerEmail,
-        customerName:   data.buyerName,
-        description:    data.description,
-        callbackUrl:    data.callbackUrl,
-      },
-      { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, timeout: 15_000 }
-    );
-    return { paymentUrl: res.data.redirectUrl || res.data.paymentUrl, reference, accessCode: res.data.accessCode };
-  } catch {
-    const reference = `AGT_${data.deliveryId}_${Date.now()}`;
-    return {
-      paymentUrl: `${process.env.FRONTEND_URL}/payment/mock?ref=${reference}&amount=${data.amount}&deliveryId=${data.deliveryId}`,
-      reference,
-    };
-  }
-}
-
-export async function verifyPayment(transactionRef: string) {
-  try {
-    const token = await getAccessToken();
-    const res   = await axios.get(`${BASE_URL}/api/v1/purchases/${transactionRef}`, {
-      headers: { Authorization: `Bearer ${token}` }, timeout: 10_000,
+      headers: { "Content-Type": "application/json" },
+      timeout: 20_000,
     });
+
+    const d = res.data;
+    console.log("[Interswitch] Verify response:", JSON.stringify(d));
+
+    const success =
+      d.ResponseCode === "00" &&
+      Number(d.Amount) === expectedKobo;
+
     return {
-      success:       res.data.responseCode === "00",
-      amount:        res.data.amount / 100,
-      reference:     transactionRef,
-      paymentMethod: res.data.paymentMethod || "CARD",
-      message:       res.data.responseDescription,
+      success,
+      responseCode:     d.ResponseCode        || "",
+      responseDesc:     d.ResponseDescription || "",
+      amount:           Number(d.Amount)       || 0,
+      amountNaira:      (Number(d.Amount) || 0) / 100,
+      paymentReference: d.PaymentReference    || "",
+      merchantRef:      d.MerchantReference   || txnRef,
     };
-  } catch {
-    return { success: true, amount: 0, reference: transactionRef, paymentMethod: "CARD", message: "Sandbox OK" };
+
+  } catch (err: any) {
+    const status   = err.response?.status;
+    const errData  = err.response?.data;
+    console.error("[Interswitch] Verify error:", status, errData || err.message);
+
+    const isNetworkError = !err.response; // no response = network/timeout issue
+
+    if (isNetworkError && process.env.NODE_ENV !== "production") {
+      console.warn("[Interswitch] Network error — using sandbox fallback");
+      return {
+        success:          true,
+        responseCode:     "00",
+        responseDesc:     "Approved (sandbox fallback — network error)",
+        amount:           expectedKobo,
+        amountNaira:      expectedKobo / 100,
+        paymentReference: `SANDBOX_${txnRef}`,
+        merchantRef:      txnRef,
+      };
+    }
+
+    // Real Interswitch error — return it, don't swallow
+    return {
+      success:          false,
+      responseCode:     errData?.ResponseCode     || "ERR",
+      responseDesc:     errData?.ResponseDescription || err.message || "Verification failed",
+      amount:           0,
+      amountNaira:      0,
+      paymentReference: "",
+      merchantRef:      txnRef,
+    };
   }
 }
 
-export async function disburseLoan(data: {
-  accountNumber: string; bankCode: string; amount: number; reference: string; narration: string;
-}) {
-  try {
-    const token = await getAccessToken();
-    const res   = await axios.post(
-      `${BASE_URL}/api/v3/transactions`,
-      {
-        beneficiaryAccountNumber: data.accountNumber,
-        beneficiaryBankCode:      data.bankCode,
-        amount:                   data.amount * 100,
-        transferReference:        data.reference,
-        narration:                data.narration,
-        currency:                 "NGN",
-      },
-      { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, timeout: 15_000 }
-    );
-    return { reference: res.data.transactionReference || data.reference, status: "SUCCESS" };
-  } catch {
-    return { reference: `ISW_${Date.now()}`, status: "SUCCESS" };
-  }
-}
-
-export function validateWebhookSignature(payload: string, signature: string): boolean {
-  const secret   = process.env.INTERSWITCH_WEBHOOK_SECRET || "";
-  const expected = crypto.createHmac("sha512", secret).update(payload).digest("hex");
-  return expected === signature;
+export function getCheckoutScriptUrl(): string {
+  return process.env.NODE_ENV === "production"
+    ? "https://newwebpay.interswitchng.com/inline-checkout.js"
+    : "https://newwebpay.qa.interswitchng.com/inline-checkout.js";
 }

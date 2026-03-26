@@ -1,4 +1,3 @@
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -15,28 +14,22 @@ enum Role {
   AGGREGATOR
 }
 
-enum DeliveryStatus {
+enum InventoryStatus {
+  AVAILABLE
+  RESERVED
+  SOLD
+}
+
+enum TransactionStatus {
   PENDING
   PAID
+  ASSISTED
   CANCELLED
-  DISPUTED
 }
 
-enum LoanStatus {
-  PENDING
-  APPROVED
-  DISBURSED
-  REPAYING
-  COMPLETED
-  REJECTED
-}
-
-enum TransactionType {
-  PAYMENT_RECEIVED
-  LOAN_DISBURSEMENT
-  LOAN_REPAYMENT
-  WITHDRAWAL
-  PLATFORM_FEE
+enum PaymentMethod {
+  INTERSWITCH
+  ASSISTED
 }
 
 enum NotificationChannel {
@@ -45,7 +38,6 @@ enum NotificationChannel {
   IN_APP
 }
 
-// USER 
 model User {
   id           String   @id @default(cuid())
   name         String
@@ -64,7 +56,6 @@ model User {
   refreshTokens RefreshToken[]
 }
 
-// REFRESH TOKENS
 model RefreshToken {
   id        String   @id @default(cuid())
   token     String   @unique
@@ -74,7 +65,6 @@ model RefreshToken {
   createdAt DateTime @default(now())
 }
 
-// FARMER
 model Farmer {
   id               String   @id @default(cuid())
   userId           String   @unique
@@ -85,19 +75,16 @@ model Farmer {
   virtualAccountNo String?  @unique
   bankName         String?
   bankCode         String?
-  creditScore      Int      @default(0)
   totalEarned      Float    @default(0)
   walletBalance    Float    @default(0)
+  registeredBy     String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  deliveries   Delivery[]
+  inventory    Inventory[]
   transactions Transaction[]
-  loans        Loan[]
-  harvests     Harvest[]
 }
 
-// BUYER 
 model Buyer {
   id          String   @id @default(cuid())
   userId      String   @unique
@@ -106,11 +93,26 @@ model Buyer {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  deliveries   Delivery[]
   transactions Transaction[]
 }
 
-// AGGREGATOR
+model BuyerContact {
+  id           String     @id @default(cuid())
+  aggregatorId String
+  aggregator   Aggregator @relation(fields: [aggregatorId], references: [id])
+  name         String
+  phone        String
+  email        String?
+  companyName  String?
+  buyerId      String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  transactions Transaction[]
+
+  @@unique([aggregatorId, phone])
+}
+
 model Aggregator {
   id               String   @id @default(cuid())
   userId           String   @unique
@@ -120,113 +122,92 @@ model Aggregator {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  deliveries Delivery[]
+  inventory     Inventory[]
+  transactions  Transaction[]
+  buyerContacts BuyerContact[]
 }
 
-// DELIVERY
-model Delivery {
-  id            String         @id @default(cuid())
+model Inventory {
+  id            String          @id @default(cuid())
   farmerId      String
-  farmer        Farmer         @relation(fields: [farmerId], references: [id])
-  buyerId       String
-  buyer         Buyer          @relation(fields: [buyerId], references: [id])
-  aggregatorId  String?
-  aggregator    Aggregator?    @relation(fields: [aggregatorId], references: [id])
-  productName   String
+  farmer        Farmer          @relation(fields: [farmerId], references: [id])
+  addedById     String?
+  aggregator    Aggregator?     @relation(fields: [addedById], references: [id])
+  cropType      String
   quantity      Float
   pricePerKg    Float
-  totalAmount   Float
-  status        DeliveryStatus @default(PENDING)
-  paidAt        DateTime?
-  interswitchRef String?
-  paymentMethod String?
-  receiptCode   String?        @unique
-  riskScore     String?        @default("LOW")
-  riskReason    String?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  totalValue    Float
+  status        InventoryStatus @default(AVAILABLE)
+  notes         String?
+  transactionId String?
+  transaction   Transaction?    @relation(fields: [transactionId], references: [id])
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+}
 
-  transaction   Transaction?
+model Transaction {
+  id             String            @id @default(cuid())
+  txnRef         String            @unique
+  aggregatorId   String
+  aggregator     Aggregator        @relation(fields: [aggregatorId], references: [id])
+  farmerId       String
+  farmer         Farmer            @relation(fields: [farmerId], references: [id])
+  buyerId        String?
+  buyer          Buyer?            @relation(fields: [buyerId], references: [id])
+  buyerContactId String?
+  buyerContact   BuyerContact?     @relation(fields: [buyerContactId], references: [id])
+  cropType       String
+  quantity       Float
+  pricePerKg     Float
+  totalAmount    Float
+  platformFee    Float             @default(0)
+  farmerReceives Float             @default(0)
+  status         TransactionStatus @default(PENDING)
+  paymentMethod  PaymentMethod?
+  interswitchRef String?
+  interswitchPay String?
+  buyerNotified  Boolean           @default(false)
+  paymentLink    String?
+  notes          String?
+  riskScore      String?   // LOW | MEDIUM | HIGH — from AI fraud check
+  riskReason     String?   // AI explanation
+  paidAt         DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
   receipt       Receipt?
+  inventory     Inventory[]
   notifications Notification[]
 }
 
-// RECEIPT 
 model Receipt {
-  id            String   @id @default(cuid())
-  deliveryId    String   @unique
-  delivery      Delivery @relation(fields: [deliveryId], references: [id])
-  receiptCode   String   @unique
-  farmerName    String
-  buyerName     String
-  productName   String
-  quantity      Float
-  amount        Float
-  paymentMethod String
-  paidAt        DateTime
-  createdAt     DateTime @default(now())
+  id             String      @id @default(cuid())
+  transactionId  String      @unique
+  transaction    Transaction @relation(fields: [transactionId], references: [id])
+  txnRef         String      @unique
+  farmerName     String
+  farmName       String
+  buyerName      String
+  cropType       String
+  quantity       Float
+  pricePerKg     Float
+  totalAmount    Float
+  platformFee    Float
+  farmerReceives Float
+  paymentMethod  String
+  paidAt         DateTime
+  createdAt      DateTime    @default(now())
 }
 
-// HARVEST 
-model Harvest {
-  id          String   @id @default(cuid())
-  farmerId    String
-  farmer      Farmer   @relation(fields: [farmerId], references: [id])
-  cropType    String
-  quantity    Float
-  pricePerKg  Float
-  totalValue  Float
-  description String?
-  confirmed   Boolean  @default(false)
-  confirmedBy String?
-  createdAt   DateTime @default(now())
-}
-
-// TRANSACTION 
-model Transaction {
-  id             String          @id @default(cuid())
-  farmerId       String
-  farmer         Farmer          @relation(fields: [farmerId], references: [id])
-  buyerId        String?
-  buyer          Buyer?          @relation(fields: [buyerId], references: [id])
-  deliveryId     String?         @unique
-  delivery       Delivery?       @relation(fields: [deliveryId], references: [id])
-  type           TransactionType
-  amount         Float
-  platformFee    Float           @default(0)
-  netAmount      Float
-  description    String
-  interswitchRef String?
-  status         String          @default("SUCCESS")
-  createdAt      DateTime        @default(now())
-}
-
-// LOAN 
-model Loan {
-  id             String     @id @default(cuid())
-  farmerId       String
-  farmer         Farmer     @relation(fields: [farmerId], references: [id])
-  amount         Float
-  interestRate   Float      @default(5.0)
-  totalRepayable Float
-  amountRepaid   Float      @default(0)
-  status         LoanStatus @default(PENDING)
-  disbursedAt    DateTime?
-  dueDate        DateTime?
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
-}
-
-// NOTIFICATION 
 model Notification {
-  id         String              @id @default(cuid())
-  userId     String
-  user       User                @relation(fields: [userId], references: [id])
-  deliveryId String?
-  delivery   Delivery?           @relation(fields: [deliveryId], references: [id])
-  channel    NotificationChannel
-  status     String              @default("SENT")
-  message    String
-  isRead     Boolean             @default(false)
-  createdAt  DateTime            @default(now())
+  id            String              @id @default(cuid())
+  userId        String
+  user          User                @relation(fields: [userId], references: [id])
+  transactionId String?
+  transaction   Transaction?        @relation(fields: [transactionId], references: [id])
+  channel       NotificationChannel
+  status        String              @default("SENT")
+  message       String
+  isRead        Boolean             @default(false)
+  createdAt     DateTime            @default(now())
 }

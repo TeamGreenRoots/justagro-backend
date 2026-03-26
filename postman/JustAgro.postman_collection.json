@@ -1,149 +1,71 @@
 {
   "info": {
-    "name": "JustAgro API",
-    "description": "Complete JustAgro API collection — Interswitch Hackathon 2024\n\n## Quick Start\n1. Register a farmer, buyer, and aggregator\n2. Login as farmer → copy token → set as `farmerToken` variable\n3. Login as buyer → copy token → set as `buyerToken` variable\n4. Run requests in order",
-    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "version": { "major": 1, "minor": 0, "patch": 0 }
+    "name": "JustAgro API v1",
+    "description": "Complete JustAgro API v1 — full flow from registration to payment verification",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     { "key": "baseUrl",      "value": "http://localhost:5000", "type": "string" },
-    { "key": "farmerToken",  "value": "",                      "type": "string" },
-    { "key": "buyerToken",   "value": "",                      "type": "string" },
-    { "key": "aggToken",     "value": "",                      "type": "string" },
-    { "key": "farmerId",     "value": "",                      "type": "string" },
-    { "key": "buyerId",      "value": "",                      "type": "string" },
-    { "key": "deliveryId",   "value": "",                      "type": "string" }
+    { "key": "aggToken",     "value": "", "type": "string" },
+    { "key": "farmerToken",  "value": "", "type": "string" },
+    { "key": "buyerToken",   "value": "", "type": "string" },
+    { "key": "farmerId",     "value": "", "type": "string" },
+    { "key": "inventoryId",  "value": "", "type": "string" },
+    { "key": "txnId",        "value": "", "type": "string" },
+    { "key": "txnRef",       "value": "", "type": "string" },
+    { "key": "contactId",    "value": "", "type": "string" }
   ],
   "item": [
     {
       "name": "Health",
-      "item": [
-        {
-          "name": "Health Check",
-          "request": {
-            "method": "GET",
-            "url": "{{baseUrl}}/health",
-            "description": "Verify the server is running"
-          }
-        }
-      ]
+      "item": [{
+        "name": "Health Check",
+        "request": { "method": "GET", "url": "{{baseUrl}}/health" }
+      }]
     },
     {
       "name": "Auth",
       "item": [
-        {
-          "name": "Register — Farmer",
-          "event": [{
-            "listen": "test",
-            "script": {
-              "exec": [
-                "const res = pm.response.json();",
-                "if (res.userId) pm.collectionVariables.set('farmerId', res.userId);",
-                "pm.test('Status 201', () => pm.response.to.have.status(201));"
-              ]
-            }
-          }],
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": "{{baseUrl}}/api/v1/auth/register",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Emeka Okafor\",\n  \"phone\": \"08012345678\",\n  \"password\": \"securepass123\",\n  \"role\": \"FARMER\",\n  \"farmName\": \"Emeka Rice Farm\",\n  \"location\": \"Kano State\",\n  \"cropTypes\": [\"Rice\", \"Maize\"]\n}"
-            }
-          }
-        },
-        {
-          "name": "Register — Buyer",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": "{{baseUrl}}/api/v1/auth/register",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"AgroMart Nigeria\",\n  \"phone\": \"08087654321\",\n  \"password\": \"securepass123\",\n  \"role\": \"BUYER\",\n  \"companyName\": \"AgroMart Nigeria Ltd\"\n}"
-            }
-          }
-        },
         {
           "name": "Register — Aggregator",
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "url": "{{baseUrl}}/api/v1/auth/register",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Platform Admin\",\n  \"phone\": \"08011112222\",\n  \"password\": \"admin123\",\n  \"role\": \"AGGREGATOR\",\n  \"organizationName\": \"JustAgro HQ\"\n}"
-            }
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"JustAgro Admin\",\n  \"phone\": \"08000000001\",\n  \"password\": \"demo1234\",\n  \"role\": \"AGGREGATOR\",\n  \"organizationName\": \"JustAgro HQ\"\n}" }
           }
         },
         {
-          "name": "Login — Farmer",
-          "event": [{
-            "listen": "test",
-            "script": {
-              "exec": [
-                "const res = pm.response.json();",
-                "if (res.accessToken) pm.collectionVariables.set('farmerToken', res.accessToken);",
-                "pm.test('Has access token', () => pm.expect(res.accessToken).to.be.a('string'));",
-                "pm.test('Role is FARMER', () => pm.expect(res.user.role).to.equal('FARMER'));"
-              ]
-            }
-          }],
+          "name": "Register — Farmer (Self)",
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": "{{baseUrl}}/api/v1/auth/login",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"phone\": \"08012345678\",\n  \"password\": \"securepass123\"\n}"
-            }
-          }
-        },
-        {
-          "name": "Login — Buyer",
-          "event": [{
-            "listen": "test",
-            "script": {
-              "exec": [
-                "const res = pm.response.json();",
-                "if (res.accessToken) pm.collectionVariables.set('buyerToken', res.accessToken);"
-              ]
-            }
-          }],
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": "{{baseUrl}}/api/v1/auth/login",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"phone\": \"08087654321\",\n  \"password\": \"securepass123\"\n}"
-            }
+            "url": "{{baseUrl}}/api/v1/auth/register",
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Emeka Okafor\",\n  \"phone\": \"08000000002\",\n  \"password\": \"demo1234\",\n  \"role\": \"FARMER\",\n  \"farmName\": \"Emeka Rice Farm\",\n  \"location\": \"Kano State\",\n  \"cropTypes\": [\"Rice\", \"Maize\"]\n}" }
           }
         },
         {
           "name": "Login — Aggregator",
-          "event": [{
-            "listen": "test",
-            "script": {
-              "exec": [
-                "const res = pm.response.json();",
-                "if (res.accessToken) pm.collectionVariables.set('aggToken', res.accessToken);"
-              ]
-            }
-          }],
+          "event": [{ "listen": "test", "script": { "exec": ["const r = pm.response.json();", "if (r.accessToken) pm.collectionVariables.set('aggToken', r.accessToken);"] } }],
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "url": "{{baseUrl}}/api/v1/auth/login",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"phone\": \"08011112222\",\n  \"password\": \"admin123\"\n}"
-            }
+            "body": { "mode": "raw", "raw": "{\n  \"phone\": \"08000000001\",\n  \"password\": \"demo1234\"\n}" }
           }
         },
         {
-          "name": "Get Current User (me)",
+          "name": "Login — Farmer",
+          "event": [{ "listen": "test", "script": { "exec": ["const r = pm.response.json();", "if (r.accessToken) pm.collectionVariables.set('farmerToken', r.accessToken);", "if (r.user?.farmerId) pm.collectionVariables.set('farmerId', r.user.farmerId);"] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/v1/auth/login",
+            "body": { "mode": "raw", "raw": "{\n  \"phone\": \"08000000002\",\n  \"password\": \"demo1234\"\n}" }
+          }
+        },
+        {
+          "name": "Get Me",
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{farmerToken}}" }],
@@ -160,36 +82,162 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{farmerToken}}" }],
-            "url": "{{baseUrl}}/api/v1/farmer/dashboard",
-            "description": "Get wallet, credit score, loans, deliveries"
+            "url": "{{baseUrl}}/api/v1/farmer/dashboard/me"
           }
         },
         {
-          "name": "Update Profile",
+          "name": "Update Farm Profile",
           "request": {
             "method": "PATCH",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{farmerToken}}" },
-              { "key": "Content-Type",  "value": "application/json" }
-            ],
-            "url": "{{baseUrl}}/api/v1/farmer/profile",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"farmName\": \"Emeka Premium Farm\",\n  \"location\": \"Kano State\",\n  \"cropTypes\": [\"Rice\", \"Maize\", \"Sorghum\"]\n}"
-            }
+            "header": [{ "key": "Authorization", "value": "Bearer {{farmerToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/v1/farmer/profile/me",
+            "body": { "mode": "raw", "raw": "{\n  \"farmName\": \"Emeka Premium Farm\",\n  \"location\": \"Kano State\",\n  \"cropTypes\": [\"Rice\", \"Maize\", \"Sorghum\"]\n}" }
           }
         }
       ]
     },
     {
-      "name": "Buyer",
+      "name": "Inventory",
       "item": [
         {
-          "name": "Buyer Dashboard",
+          "name": "Farmer Adds Own Stock",
+          "event": [{ "listen": "test", "script": { "exec": ["const r = pm.response.json();", "if (r.data?.id) pm.collectionVariables.set('inventoryId', r.data.id);"] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{farmerToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/v1/inventory",
+            "body": { "mode": "raw", "raw": "{\n  \"cropType\": \"Maize\",\n  \"quantity\": 500,\n  \"pricePerKg\": 180,\n  \"notes\": \"Grade A, freshly harvested\"\n}" }
+          }
+        },
+        {
+          "name": "Aggregator Adds Stock for Farmer",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{aggToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/v1/inventory",
+            "body": { "mode": "raw", "raw": "{\n  \"farmerId\": \"{{farmerId}}\",\n  \"cropType\": \"Rice\",\n  \"quantity\": 1000,\n  \"pricePerKg\": 550,\n  \"notes\": \"Freshly harvested, Grade A\"\n}" }
+          }
+        },
+        {
+          "name": "List All Inventory (Aggregator)",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{buyerToken}}" }],
-            "url": "{{baseUrl}}/api/v1/buyer/dashboard"
+            "header": [{ "key": "Authorization", "value": "Bearer {{aggToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/inventory?status=AVAILABLE&page=1&limit=10", "query": [{ "key": "status", "value": "AVAILABLE" }, { "key": "page", "value": "1" }, { "key": "limit", "value": "10" }] }
+          }
+        },
+        {
+          "name": "List My Inventory (Farmer)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{farmerToken}}" }],
+            "url": "{{baseUrl}}/api/v1/inventory"
+          }
+        },
+        {
+          "name": "Edit Inventory Item",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{farmerToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/v1/inventory/{{inventoryId}}",
+            "body": { "mode": "raw", "raw": "{\n  \"quantity\": 450,\n  \"pricePerKg\": 190\n}" }
+          }
+        },
+        {
+          "name": "Delete Inventory Item",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{farmerToken}}" }],
+            "url": "{{baseUrl}}/api/v1/inventory/{{inventoryId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Buyer Contacts",
+      "item": [
+        {
+          "name": "List Buyer Contacts",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{aggToken}}" }],
+            "url": "{{baseUrl}}/api/v1/buyer-contacts"
+          }
+        },
+        {
+          "name": "Add Buyer Contact",
+          "event": [{ "listen": "test", "script": { "exec": ["const r = pm.response.json();", "if (r.data?.id) pm.collectionVariables.set('contactId', r.data.id);"] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{aggToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/v1/buyer-contacts",
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Abubakar Grains Store\",\n  \"phone\": \"08012345678\",\n  \"companyName\": \"Abubakar & Sons Ltd\",\n  \"email\": \"abubakar@grains.com\"\n}" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Transactions",
+      "item": [
+        {
+          "name": "Create Transaction",
+          "event": [{ "listen": "test", "script": { "exec": ["const r = pm.response.json();", "if (r.data?.id) pm.collectionVariables.set('txnId', r.data.id);", "if (r.data?.txnRef) pm.collectionVariables.set('txnRef', r.data.txnRef);"] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{aggToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/v1/transactions",
+            "body": { "mode": "raw", "raw": "{\n  \"farmerId\": \"{{farmerId}}\",\n  \"inventoryId\": \"{{inventoryId}}\",\n  \"cropType\": \"Maize\",\n  \"quantity\": 200,\n  \"pricePerKg\": 180,\n  \"buyerContactId\": \"{{contactId}}\"\n}" }
+          }
+        },
+        {
+          "name": "List Transactions",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{aggToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/transactions?page=1&limit=10", "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "10" }] }
+          }
+        },
+        {
+          "name": "Get Public Transaction (Payment Page)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/transactions/public/{{txnRef}}",
+            "description": "No auth needed — this is what buyer opens from the payment link"
+          }
+        },
+        {
+          "name": "Verify Payment (After Interswitch)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/v1/transactions/public/{{txnRef}}/verify",
+            "body": { "mode": "raw", "raw": "{\n  \"resp\": \"00\"\n}" }
+          }
+        },
+        {
+          "name": "Mark as Paid (Assisted — no smartphone)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{aggToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/v1/transactions/{{txnId}}/assist",
+            "body": { "mode": "raw", "raw": "{\n  \"notes\": \"Cash paid in person at farm gate\"\n}" }
+          }
+        },
+        {
+          "name": "Edit Transaction (PENDING only)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{aggToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/v1/transactions/{{txnId}}",
+            "body": { "mode": "raw", "raw": "{\n  \"quantity\": 250,\n  \"pricePerKg\": 185\n}" }
+          }
+        },
+        {
+          "name": "Cancel Transaction",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{aggToken}}" }],
+            "url": "{{baseUrl}}/api/v1/transactions/{{txnId}}/cancel"
           }
         }
       ]
@@ -204,178 +252,22 @@
             "header": [{ "key": "Authorization", "value": "Bearer {{aggToken}}" }],
             "url": "{{baseUrl}}/api/v1/aggregator/dashboard"
           }
-        }
-      ]
-    },
-    {
-      "name": "Deliveries",
-      "item": [
+        },
         {
-          "name": "Create Delivery",
-          "event": [{
-            "listen": "test",
-            "script": {
-              "exec": [
-                "const res = pm.response.json();",
-                "if (res.delivery?.id) pm.collectionVariables.set('deliveryId', res.delivery.id);"
-              ]
-            }
-          }],
+          "name": "Register Offline Farmer",
           "request": {
             "method": "POST",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{aggToken}}" },
-              { "key": "Content-Type",  "value": "application/json" }
-            ],
-            "url": "{{baseUrl}}/api/v1/deliveries",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"farmerId\": \"{{farmerId}}\",\n  \"buyerId\": \"{{buyerId}}\",\n  \"productName\": \"Maize\",\n  \"quantity\": 500,\n  \"pricePerKg\": 180\n}"
-            }
+            "header": [{ "key": "Authorization", "value": "Bearer {{aggToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/v1/aggregator/register-farmer",
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Bello Yusuf\",\n  \"phone\": \"08055443322\",\n  \"farmName\": \"Bello Sorghum Farm\",\n  \"location\": \"Niger State\",\n  \"cropTypes\": [\"Sorghum\", \"Millet\"]\n}" }
           }
         },
         {
-          "name": "List Pending Deliveries (Buyer)",
-          "request": {
-            "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{buyerToken}}" }],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/deliveries?tab=pending",
-              "query": [{ "key": "tab", "value": "pending" }]
-            }
-          }
-        },
-        {
-          "name": "List Payment History (Buyer)",
-          "request": {
-            "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{buyerToken}}" }],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/deliveries?tab=history",
-              "query": [{ "key": "tab", "value": "history" }]
-            }
-          }
-        },
-        {
-          "name": "Get Single Delivery",
-          "request": {
-            "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{buyerToken}}" }],
-            "url": "{{baseUrl}}/api/v1/deliveries/{{deliveryId}}"
-          }
-        }
-      ]
-    },
-    {
-      "name": "Payments",
-      "item": [
-        {
-          "name": "Initiate Payment (Confirm & Pay)",
-          "event": [{
-            "listen": "test",
-            "script": {
-              "exec": [
-                "const res = pm.response.json();",
-                "pm.test('Has payment URL', () => pm.expect(res.paymentUrl).to.be.a('string'));",
-                "if (res.reference) pm.collectionVariables.set('paymentRef', res.reference);"
-              ]
-            }
-          }],
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Authorization", "value": "Bearer {{buyerToken}}" }],
-            "url": "{{baseUrl}}/api/v1/deliveries/{{deliveryId}}/pay",
-            "description": "Returns Interswitch payment URL. Open URL to complete payment."
-          }
-        },
-        {
-          "name": "Verify Payment",
-          "request": {
-            "method": "POST",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{buyerToken}}" },
-              { "key": "Content-Type",  "value": "application/json" }
-            ],
-            "url": "{{baseUrl}}/api/v1/deliveries/{{deliveryId}}/verify",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"reference\": \"{{paymentRef}}\",\n  \"paymentMethod\": \"CARD\"\n}"
-            },
-            "description": "Confirm payment → generates receipt, updates score, sends SMS"
-          }
-        }
-      ]
-    },
-    {
-      "name": "Loans",
-      "item": [
-        {
-          "name": "Get Loan History",
-          "request": {
-            "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{farmerToken}}" }],
-            "url": "{{baseUrl}}/api/v1/loans"
-          }
-        },
-        {
-          "name": "Apply for Loan",
-          "request": {
-            "method": "POST",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{farmerToken}}" },
-              { "key": "Content-Type",  "value": "application/json" }
-            ],
-            "url": "{{baseUrl}}/api/v1/loans",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"amount\": 50000\n}"
-            }
-          }
-        }
-      ]
-    },
-    {
-      "name": "Receipts",
-      "item": [
-        {
-          "name": "Get Receipt (+ WhatsApp URL)",
-          "request": {
-            "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{farmerToken}}" }],
-            "url": "{{baseUrl}}/api/v1/receipts/{{deliveryId}}",
-            "description": "Returns receipt data and a pre-filled WhatsApp share link"
-          }
-        }
-      ]
-    },
-    {
-      "name": "AI Features",
-      "item": [
-        {
-          "name": "AI Credit Score Explainer",
-          "request": {
-            "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{farmerToken}}" }],
-            "url": "{{baseUrl}}/api/v1/ai/score-explain",
-            "description": "Gemini AI explains your score and gives specific tips (FREE)"
-          }
-        },
-        {
-          "name": "AI Fraud Detection",
+          "name": "List All Farmers (paginated)",
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{aggToken}}" }],
-            "url": "{{baseUrl}}/api/v1/ai/fraud-check/{{deliveryId}}",
-            "description": "Analyzes delivery for fraud risk — LOW/MEDIUM/HIGH"
-          }
-        },
-        {
-          "name": "AI Price Intelligence",
-          "request": {
-            "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{farmerToken}}" }],
-            "url": "{{baseUrl}}/api/v1/ai/price-intelligence/{{deliveryId}}",
-            "description": "Compares delivery price to market rate, tells farmer if underpaid"
+            "url": { "raw": "{{baseUrl}}/api/v1/farmers?page=1&limit=10", "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "10" }] }
           }
         }
       ]
@@ -384,7 +276,7 @@
       "name": "Notifications",
       "item": [
         {
-          "name": "Get All Notifications",
+          "name": "Get Notifications",
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{farmerToken}}" }],
@@ -392,14 +284,11 @@
           }
         },
         {
-          "name": "Get Unread Only",
+          "name": "Mark All Read",
           "request": {
-            "method": "GET",
+            "method": "PATCH",
             "header": [{ "key": "Authorization", "value": "Bearer {{farmerToken}}" }],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/notifications?unread=true",
-              "query": [{ "key": "unread", "value": "true" }]
-            }
+            "url": "{{baseUrl}}/api/v1/notifications/read-all"
           }
         }
       ]

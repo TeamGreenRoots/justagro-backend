@@ -4,23 +4,27 @@ import bcrypt from "bcryptjs";
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log(">>>>> Seeding demo data...");
+  console.log("🌱 Seeding JustAgro v2 demo data...\n");
 
-  const hash = await bcrypt.hash("demo1234", 12);
+  const hash       = await bcrypt.hash("demo1234", 12);
+  const phoneHash  = await bcrypt.hash("08033221100", 12); // offline farmer pwd = phone
 
-  // Aggregator 
   const aggUser = await prisma.user.upsert({
     where:  { phone: "08000000001" },
     update: {},
     create: {
       name: "JustAgro Admin", phone: "08000000001",
       passwordHash: hash, role: "AGGREGATOR",
-      aggregator: { create: { organizationName: "JustAgro HQ", commissionRate: 1.0 } },
+      aggregator: {
+        create: { organizationName: "JustAgro HQ", commissionRate: 1.0 },
+      },
     },
     include: { aggregator: true },
   });
+  const agg = aggUser.aggregator!;
+  console.log("Aggregator created:", aggUser.name);
 
-  // Farmer 1 (high score - has transactions) 
+  // FARMER 1 — Has smartphone, self-registered 
   const farmer1User = await prisma.user.upsert({
     where:  { phone: "08000000002" },
     update: {},
@@ -29,18 +33,44 @@ async function main() {
       passwordHash: hash, role: "FARMER",
       farmer: {
         create: {
-          farmName: "Emeka Rice Farm", location: "Kano State",
+          farmName:  "Emeka Rice Farm",
+          location:  "Kano State",
           cropTypes: ["Rice", "Maize"],
-          virtualAccountNo: "0123456789", bankName: "Access Bank", bankCode: "044",
-          creditScore: 72, totalEarned: 450_000, walletBalance: 85_000,
+          totalEarned:   450_000,
+          walletBalance:  85_000,
         },
       },
     },
     include: { farmer: true },
   });
+  const farmer1 = farmer1User.farmer!;
+  console.log("Farmer 1 created (smartphone):", farmer1User.name);
 
-  // Farmer 2 (new - low score) 
+  // FARMER 2 — No smartphone, registered by aggregator
   const farmer2User = await prisma.user.upsert({
+    where:  { phone: "08033221100" },
+    update: {},
+    create: {
+      name: "Musa Abdullahi", phone: "08033221100",
+      passwordHash: phoneHash, role: "FARMER",
+      farmer: {
+        create: {
+          farmName:    "Musa Tomato Farm",
+          location:    "Kaduna State",
+          cropTypes:   ["Tomatoes", "Pepper", "Onions"],
+          registeredBy: agg.id,
+          totalEarned:  120_000,
+          walletBalance: 35_000,
+        },
+      },
+    },
+    include: { farmer: true },
+  });
+  const farmer2 = farmer2User.farmer!;
+  console.log("Farmer 2 created (no smartphone):", farmer2User.name);
+
+  // FARMER 3 — new, no transactions 
+  const farmer3User = await prisma.user.upsert({
     where:  { phone: "08000000003" },
     update: {},
     create: {
@@ -48,18 +78,19 @@ async function main() {
       passwordHash: hash, role: "FARMER",
       farmer: {
         create: {
-          farmName: "Aisha Vegetable Farm", location: "Kaduna State",
-          cropTypes: ["Tomatoes", "Pepper"],
-          virtualAccountNo: "0987654321", bankName: "GTBank", bankCode: "058",
-          creditScore: 28, totalEarned: 45_000, walletBalance: 12_000,
+          farmName:  "Aisha Vegetable Farm",
+          location:  "Sokoto State",
+          cropTypes: ["Cabbage", "Spinach"],
         },
       },
     },
     include: { farmer: true },
   });
+  const farmer3 = farmer3User.farmer!;
+  console.log("Farmer 3 created (new, no transactions):", farmer3User.name);
 
-  // Buyer 1 
-  const buyer1User = await prisma.user.upsert({
+  // BUYER (platform account) 
+  const buyerUser = await prisma.user.upsert({
     where:  { phone: "08000000004" },
     update: {},
     create: {
@@ -69,132 +100,241 @@ async function main() {
     },
     include: { buyer: true },
   });
+  console.log("Buyer created:", buyerUser.name);
 
-  // Buyer 2 
-  const buyer2User = await prisma.user.upsert({
-    where:  { phone: "08000000005" },
+  // BUYER CONTACTS (aggregator's saved contacts)
+  const contact1 = await prisma.buyerContact.upsert({
+    where:  { aggregatorId_phone: { aggregatorId: agg.id, phone: "08012345678" } },
     update: {},
     create: {
-      name: "FarmConnect Ltd", phone: "08000000005",
-      passwordHash: hash, role: "BUYER",
-      buyer: { create: { companyName: "FarmConnect Ltd" } },
+      aggregatorId: agg.id,
+      name:         "Abubakar Grains Store",
+      phone:        "08012345678",
+      companyName:  "Abubakar & Sons Ltd",
+      email:        "abubakar@grains.com",
     },
-    include: { buyer: true },
   });
 
-  const farmer1 = farmer1User.farmer!;
-  const farmer2 = farmer2User.farmer!;
-  const buyer1  = buyer1User.buyer!;
-  const buyer2  = buyer2User.buyer!;
-  const agg     = aggUser.aggregator!;
+  const contact2 = await prisma.buyerContact.upsert({
+    where:  { aggregatorId_phone: { aggregatorId: agg.id, phone: "08098765432" } },
+    update: {},
+    create: {
+      aggregatorId: agg.id,
+      name:         "FarmConnect Abuja",
+      phone:        "08098765432",
+      companyName:  "FarmConnect Ltd",
+    },
+  });
+  console.log("Buyer contacts created: 2");
 
-  // Past transactions for Farmer1 (builds credit score)
-  const txDates = [
-    { daysAgo: 90, amount: 135_000 },
-    { daysAgo: 75, amount: 112_000 },
-    { daysAgo: 60, amount: 98_000  },
-    { daysAgo: 45, amount: 155_000 },
-    { daysAgo: 30, amount: 127_000 },
-    { daysAgo: 15, amount: 143_000 },
-    { daysAgo: 5,  amount: 85_000  },
-  ];
-
-  for (const tx of txDates) {
-    const date = new Date(Date.now() - tx.daysAgo * 24 * 60 * 60 * 1000);
-    await prisma.transaction.create({
-      data: {
-        farmerId:    farmer1.id,
-        type:        "PAYMENT_RECEIVED",
-        amount:      tx.amount,
-        platformFee: tx.amount * 0.01,
-        netAmount:   tx.amount * 0.99,
-        description: "Payment from buyer",
-        status:      "SUCCESS",
-        createdAt:   date,
-      },
-    });
-  }
-
-  // Paid delivery with receipt 
-  const paidDelivery = await prisma.delivery.create({
+  // INVENTORY
+  const inv1 = await prisma.inventory.create({
     data: {
-      farmerId:      farmer1.id,
-      buyerId:       buyer1.id,
-      aggregatorId:  agg.id,
-      productName:   "Maize",
-      quantity:      500,
-      pricePerKg:    180,
-      totalAmount:   90_000,
-      status:        "PAID",
-      receiptCode:   "AGT-20241201-0001",
-      paidAt:        new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
-      interswitchRef: "ISW_MOCK_001",
-      paymentMethod: "CARD",
-      riskScore:     "LOW",
+      farmerId:   farmer1.id,
+      cropType:   "Rice",
+      quantity:   1000,
+      pricePerKg: 550,
+      totalValue: 550_000,
+      status:     "AVAILABLE",
+      notes:      "Grade A, freshly harvested",
+    },
+  });
+
+  const inv2 = await prisma.inventory.create({
+    data: {
+      farmerId:   farmer1.id,
+      cropType:   "Maize",
+      quantity:   800,
+      pricePerKg: 180,
+      totalValue: 144_000,
+      status:     "AVAILABLE",
+    },
+  });
+
+  // Aggregator added stock for offline farmer2
+  const inv3 = await prisma.inventory.create({
+    data: {
+      farmerId:   farmer2.id,
+      addedById:  agg.id,
+      cropType:   "Tomatoes",
+      quantity:   300,
+      pricePerKg: 350,
+      totalValue: 105_000,
+      status:     "AVAILABLE",
+      notes:      "Fresh, market-ready",
+    },
+  });
+
+  const inv4 = await prisma.inventory.create({
+    data: {
+      farmerId:   farmer2.id,
+      addedById:  agg.id,
+      cropType:   "Pepper",
+      quantity:   150,
+      pricePerKg: 420,
+      totalValue: 63_000,
+      status:     "AVAILABLE",
+    },
+  });
+  console.log("Inventory created: 4 items");
+
+  // PAID TRANSACTION (history table) 
+  const paidTxn = await prisma.transaction.create({
+    data: {
+      txnRef:         "AGT_1717200000000_0001",
+      aggregatorId:   agg.id,
+      farmerId:       farmer1.id,
+      buyerContactId: contact1.id,
+      cropType:       "Maize",
+      quantity:       500,
+      pricePerKg:     180,
+      totalAmount:    90_000,
+      platformFee:    900,
+      farmerReceives: 89_100,
+      status:         "PAID",
+      paymentMethod:  "INTERSWITCH",
+      interswitchRef: "AGT_1717200000000_0001",
+      interswitchPay: "UBA|API|MX180335|01-12-2024|001|001",
+      buyerNotified:  true,
+      paymentLink:    "http://localhost:3000/pay/AGT_1717200000000_0001",
+      paidAt:         new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
     },
   });
 
   await prisma.receipt.create({
     data: {
-      deliveryId:    paidDelivery.id,
-      receiptCode:   "AGT-20241201-0001",
-      farmerName:    "Emeka Okafor",
-      buyerName:     "AgroMart Nigeria",
-      productName:   "Maize",
-      quantity:      500,
-      amount:        90_000,
-      paymentMethod: "CARD",
-      paidAt:        new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
+      transactionId:  paidTxn.id,
+      txnRef:         paidTxn.txnRef,
+      farmerName:     "Emeka Okafor",
+      farmName:       "Emeka Rice Farm",
+      buyerName:      "Abubakar Grains Store",
+      cropType:       "Maize",
+      quantity:       500,
+      pricePerKg:     180,
+      totalAmount:    90_000,
+      platformFee:    900,
+      farmerReceives: 89_100,
+      paymentMethod:  "INTERSWITCH",
+      paidAt:         new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
     },
   });
 
-  // 3 Pending deliveries (for demo) 
-  await prisma.delivery.createMany({
-    data: [
-      {
-        farmerId: farmer1.id, buyerId: buyer1.id, aggregatorId: agg.id,
-        productName: "Rice", quantity: 300, pricePerKg: 550, totalAmount: 165_000,
-        status: "PENDING", receiptCode: "AGT-20241202-0002", riskScore: "LOW",
-      },
-      {
-        farmerId: farmer1.id, buyerId: buyer2.id, aggregatorId: agg.id,
-        productName: "Sorghum", quantity: 200, pricePerKg: 220, totalAmount: 44_000,
-        status: "PENDING", receiptCode: "AGT-20241202-0003", riskScore: "MEDIUM",
-      },
-      {
-        farmerId: farmer2.id, buyerId: buyer1.id, aggregatorId: agg.id,
-        productName: "Tomatoes", quantity: 100, pricePerKg: 350, totalAmount: 35_000,
-        status: "PENDING", receiptCode: "AGT-20241202-0004", riskScore: "LOW",
-      },
-    ],
+  // ASSISTED TRANSACTION 
+  const assistedTxn = await prisma.transaction.create({
+    data: {
+      txnRef:         "AGT_1717200000000_0002",
+      aggregatorId:   agg.id,
+      farmerId:       farmer2.id,
+      buyerContactId: contact2.id,
+      cropType:       "Tomatoes",
+      quantity:       200,
+      pricePerKg:     350,
+      totalAmount:    70_000,
+      platformFee:    700,
+      farmerReceives: 69_300,
+      status:         "ASSISTED",
+      paymentMethod:  "ASSISTED",
+      buyerNotified:  true,
+      paymentLink:    "http://localhost:3000/pay/AGT_1717200000000_0002",
+      notes:          "Cash paid in person at farm",
+      paidAt:         new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+    },
   });
 
-  // Active loan for farmer1 
-  await prisma.loan.create({
+  await prisma.receipt.create({
+    data: {
+      transactionId:  assistedTxn.id,
+      txnRef:         assistedTxn.txnRef,
+      farmerName:     "Musa Abdullahi",
+      farmName:       "Musa Tomato Farm",
+      buyerName:      "FarmConnect Abuja",
+      cropType:       "Tomatoes",
+      quantity:       200,
+      pricePerKg:     350,
+      totalAmount:    70_000,
+      platformFee:    700,
+      farmerReceives: 69_300,
+      paymentMethod:  "ASSISTED",
+      paidAt:         new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+    },
+  });
+
+  // PENDING TRANSACTIONS (for demo) 
+  const pending1 = await prisma.transaction.create({
+    data: {
+      txnRef:         "AGT_1717200000000_0003",
+      aggregatorId:   agg.id,
+      farmerId:       farmer1.id,
+      buyerContactId: contact1.id,
+      cropType:       "Rice",
+      quantity:       300,
+      pricePerKg:     550,
+      totalAmount:    165_000,
+      platformFee:    1_650,
+      farmerReceives: 163_350,
+      status:         "PENDING",
+      buyerNotified:  true,
+      paymentLink:    "http://localhost:3000/pay/AGT_1717200000000_0003",
+    },
+  });
+
+  await prisma.inventory.create({
     data: {
       farmerId:      farmer1.id,
-      amount:        50_000,
-      interestRate:  5.0,
-      totalRepayable: 52_500,
-      amountRepaid:  7_875,
-      status:        "REPAYING",
-      disbursedAt:   new Date(Date.now() - 20 * 24 * 60 * 60 * 1000),
-      dueDate:       new Date(Date.now() + 70 * 24 * 60 * 60 * 1000),
+      cropType:      "Rice",
+      quantity:      300,
+      pricePerKg:    550,
+      totalValue:    165_000,
+      status:        "RESERVED",
+      transactionId: pending1.id,
     },
   });
 
-  console.log(`
-  ✅ >>>>> Seed complete! <<<<<
+  await prisma.transaction.create({
+    data: {
+      txnRef:         "AGT_1717200000000_0004",
+      aggregatorId:   agg.id,
+      farmerId:       farmer2.id,
+      buyerContactId: contact2.id,
+      cropType:       "Pepper",
+      quantity:       100,
+      pricePerKg:     420,
+      totalAmount:    42_000,
+      platformFee:    420,
+      farmerReceives: 41_580,
+      status:         "PENDING",
+      buyerNotified:  false,
+      paymentLink:    "http://localhost:3000/pay/AGT_1717200000000_0004",
+    },
+  });
 
-  ─────────────────────────────────────────
-  👤 DEMO ACCOUNTS (password: demo1234)
-  ─────────────────────────────────────────
-  Aggregator : 08000000001
-  Farmer 1   : 08000000002  (score: 72, has loan)
-  Farmer 2   : 08000000003  (score: 28, new)
-  Buyer 1    : 08000000004
-  Buyer 2    : 08000000005
-  ─────────────────────────────────────────
+  console.log("Transactions created: 4 (2 paid/assisted, 2 pending)\n");
+
+  console.log(`
+═══════════════════════════════════════════════
+  DEMO ACCOUNTS (all passwords: demo1234)
+═══════════════════════════════════════════════
+
+  AGGREGATOR
+  Phone: 08000000001  | Password: demo1234
+
+  FARMER 1 (smartphone, has stock)
+  Phone: 08000000002  | Password: demo1234
+
+  FARMER 2 (no smartphone — default pwd = phone)
+  Phone: 08033221100  | Password: 08033221100
+
+  FARMER 3 (new, no transactions)
+  Phone: 08000000003  | Password: demo1234
+
+  BUYER
+  Phone: 08000000004  | Password: demo1234
+
+═══════════════════════════════════════════════
+  PAYMENT LINKS (open in browser to test):
+  http://localhost:3000/pay/AGT_1717200000000_0003
+  http://localhost:3000/pay/AGT_1717200000000_0004
+═══════════════════════════════════════════════
   `);
 }
 

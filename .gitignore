@@ -1,18 +1,12 @@
 .env
 .env.local
-.env.development
 .env.production
-.env.staging
+.env.*.local
 *.pem
 *.key
-*.cert
+
 
 node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-.pnpm-store/
 
 
 dist/
@@ -25,36 +19,23 @@ prisma/generated/
 
 logs/
 *.log
-combined.log
-error.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 
 .DS_Store
 .DS_Store?
-._*
-.Spotlight-V100
-.Trashes
 Thumbs.db
-ehthumbs.db
-desktop.ini
+._*
 
 
 .vscode/*
 !.vscode/extensions.json
-!.vscode/settings.json
 .idea/
 *.swp
 *.swo
-*.sublime-project
-*.sublime-workspace
 
-
-coverage/
-.nyc_output/
-
-
-.cache/
-tmp/
-temp/
 *.zip
 *.tar.gz
+tmp/

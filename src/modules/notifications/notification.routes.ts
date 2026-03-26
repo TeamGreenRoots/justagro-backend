@@ -1,6 +1,6 @@
-import { Router } from "express";
-import { authenticate } from "../../middleware/auth";
+import { Router, Request, Response, NextFunction } from "express";
 import { prisma } from "../../config/db";
+import { authenticate } from "../../middleware/auth";
 
 const router = Router();
 router.use(authenticate);
@@ -10,104 +10,72 @@ router.use(authenticate);
  * /api/v1/notifications:
  *   get:
  *     tags: [Notifications]
- *     summary: Get user notifications
- *     description: Returns in-app notifications for the logged-in user (SMS and WhatsApp are sent externally)
+ *     summary: Get user notifications (paginated)
  *     security:
  *       - BearerAuth: []
  *     parameters:
  *       - in: query
  *         name: unread
  *         schema: { type: boolean }
- *         description: If true, returns only unread notifications
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, default: 1 }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 20 }
  *     responses:
  *       200:
- *         description: List of notifications
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:       { type: boolean }
- *                 unreadCount:   { type: integer }
- *                 notifications:
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       id:        { type: string }
- *                       message:   { type: string }
- *                       channel:   { type: string, enum: [SMS, WHATSAPP, IN_APP] }
- *                       isRead:    { type: boolean }
- *                       createdAt: { type: string, format: date-time }
+ *         description: Notifications with pagination
  */
-router.get("/", async (req, res, next) => {
+router.get("/", async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const page       = Math.max(1, parseInt(req.query.page  as string) || 1);
+    const limit      = Math.min(50, parseInt(req.query.limit as string) || 20);
+    const skip       = (page - 1) * limit;
     const unreadOnly = req.query.unread === "true";
 
-    const [notifications, unreadCount] = await Promise.all([
+    const where: any = {
+      userId: req.user!.userId,
+      ...(unreadOnly ? { isRead: false } : {}),
+    };
+
+    const [items, total, unreadCount] = await Promise.all([
       prisma.notification.findMany({
-        where: {
-          userId: req.user!.userId,
-          ...(unreadOnly ? { isRead: false } : {}),
-        },
+        where,
         orderBy: { createdAt: "desc" },
-        take:    50,
+        skip,
+        take: limit,
       }),
-      prisma.notification.count({
-        where: { userId: req.user!.userId, isRead: false },
-      }),
+      prisma.notification.count({ where }),
+      prisma.notification.count({ where: { userId: req.user!.userId, isRead: false } }),
     ]);
 
-    res.json({ success: true, unreadCount, notifications });
+    res.json({
+      success:    true,
+      data:       items,
+      unreadCount,
+      pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+    });
   } catch (err) { next(err); }
 });
 
-/**
- * @swagger
- * /api/v1/notifications/{id}/read:
- *   patch:
- *     tags: [Notifications]
- *     summary: Mark a notification as read
- *     security:
- *       - BearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema: { type: string }
- *     responses:
- *       200:
- *         description: Notification marked as read
- */
-router.patch("/:id/read", async (req, res, next) => {
+router.patch("/:id/read", async (req: Request, res: Response, next: NextFunction) => {
   try {
-    await prisma.notification.update({
-      where: { id: req.params.id },
+    await prisma.notification.updateMany({
+      where: { id: req.params.id, userId: req.user!.userId },
       data:  { isRead: true },
     });
-    res.json({ success: true, message: "Marked as read" });
+    res.json({ success: true });
   } catch (err) { next(err); }
 });
 
-/**
- * @swagger
- * /api/v1/notifications/read-all:
- *   patch:
- *     tags: [Notifications]
- *     summary: Mark all notifications as read
- *     security:
- *       - BearerAuth: []
- *     responses:
- *       200:
- *         description: All notifications marked as read
- */
-router.patch("/read-all", async (req, res, next) => {
+router.patch("/read-all", async (req: Request, res: Response, next: NextFunction) => {
   try {
     await prisma.notification.updateMany({
       where: { userId: req.user!.userId, isRead: false },
       data:  { isRead: true },
     });
-    res.json({ success: true, message: "All notifications marked as read" });
+    res.json({ success: true, message: "All marked as read" });
   } catch (err) { next(err); }
 });
 
