@@ -18,15 +18,34 @@ const app: Application = express();
 
 app.use(helmet());
 app.use(cors({
-  origin: [
-    process.env.FRONTEND_URL || "http://localhost:3000",
-    "http://localhost:3000",
-    "http://localhost:3001",
-  ],
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+
+    const allowed = [
+      process.env.FRONTEND_URL || "",
+      "http://localhost:3000",
+      "http://localhost:3001",
+      "https://justagro.vercel.app",
+    ].filter(Boolean);
+
+    if (
+      allowed.includes(origin) ||
+      origin.endsWith(".vercel.app") ||
+      origin.endsWith(".onrender.com")
+    ) {
+      return callback(null, true);
+    }
+
+    console.warn("[CORS] Blocked origin:", origin);
+    return callback(new Error("CORS: origin not allowed"), false);
+  },
   credentials:    true,
   methods:        ["GET","POST","PUT","PATCH","DELETE","OPTIONS"],
   allowedHeaders: ["Content-Type","Authorization"],
+  optionsSuccessStatus: 200,
 }));
+
+app.options("*", cors());
 
 if (process.env.NODE_ENV !== "test") app.use(morgan("dev"));
 app.use(express.json({ limit: "10mb" }));
@@ -43,7 +62,6 @@ app.get("/health", (_req, res) => {
 });
 
 app.use("/api-docs", (req: Request, res: Response, next: NextFunction) => {
-  
   const swaggerUi   = require("swagger-ui-express");
   const { swaggerSpec } = require("./config/swagger");
 
@@ -54,7 +72,6 @@ app.use("/api-docs", (req: Request, res: Response, next: NextFunction) => {
     swaggerOptions:  { persistAuthorization: true },
   });
 
-  // Run serve handlers then setup
   let i = 0;
   const runNext = (err?: any) => {
     if (err) return next(err);
@@ -68,7 +85,6 @@ app.use("/api-docs", (req: Request, res: Response, next: NextFunction) => {
 });
 
 app.get("/api-docs.json", (_req, res) => {
-
   const { swaggerSpec } = require("./config/swagger");
   res.setHeader("Content-Type", "application/json");
   res.send(swaggerSpec);
@@ -85,7 +101,6 @@ app.use(`${API}/transactions`,  transactionRoutes);
 app.use(`${API}/buyer-contacts`,buyerContactRoutes);
 app.use(`${API}/notifications`, notificationRoutes);
 app.use(`${API}/ai`,            aiRoutes);
-
 
 app.use(notFound);
 app.use(errorHandler);
