@@ -265,7 +265,7 @@ Respond ONLY with JSON (no markdown):
       performance:  `You have completed ${farmer.transactions.length} transactions on JustAgro.`,
       topAdvice:    ["Keep your inventory updated", "Respond to buyer requests quickly", "Add quality notes to your stock"],
       pricingTip:   "Check local market prices regularly to stay competitive.",
-      encouragement: "Keep farming and keep growing! 🌾",
+      encouragement: "Keep farming and keep growing!",
     });
 
     res.json({ success: true, result });
